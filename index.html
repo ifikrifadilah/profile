@@ -561,7 +561,7 @@
         f.turnBias = rand(-.22,.22);
       } else {
         f.behavior = 'burst';
-        f.speedMood = rand(1.14,1.34);
+        f.speedMood = rand(2.14,2.34);
         f.behaviorTimer = rand(.9,1.8);
       }
       f.targetSpeed = Math.max(f.baseSpeed*.48, f.baseSpeed * f.speedMood);
@@ -626,7 +626,7 @@
       state.fish.length = 0;
       for(let i=0;i<settings.fishCount;i++){
         const profile = profiles[i % profiles.length];
-        const sizeBase = rand(isTouch?21.4:23.2, isTouch?28.8:32.4);
+        const sizeBase = rand(isTouch?11.4:13.2, isTouch?28.8:32.4);
         const size = sizeBase * (['chagoi','goldenOrfe'].includes(profile.pattern)?1.14:(['commonGoldfish','shubunkinGoldfish','sarasaComet','wakinGoldfish'].includes(profile.pattern)?1.08:1.05));
         const baseSpeed = rand(isTouch?12:15, isTouch?24:38);
         const initial = Math.random() < .62 ? randomEdgeSpawn(size) : {
