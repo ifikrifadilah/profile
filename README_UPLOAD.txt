@@ -1,0 +1,1 @@
+Upload index.html dan folder assets ke root GitHub repository. Jangan upload folder induknya. Struktur: index.html, assets/flower-water-ultrahd-1920x1080.jpg, assets/river-flows-on-you.mp3 (opsional untuk musik).
