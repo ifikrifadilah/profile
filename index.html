@@ -1,1 +1,718 @@
-hello world
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#e9f7ff" />
+  <meta name="description" content="A dreamy pastel flower water ripple web experience with translucent blossoms, sparkling caustic light, and touch-reactive ripples." />
+  <title>Eau de Printemps — pastel water ripples</title>
+  <link rel="preload" as="image" href="assets/flower-water.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app" aria-label="Interactive pastel water ripple experience">
+    <section class="scene" id="scene" aria-label="Dreamy pastel water with floating translucent flowers">
+      <img class="water-photo" src="assets/flower-water.png" alt="Dreamy pastel water surface with translucent flowers and shimmering caustic light" />
+      <canvas id="waterCanvas" aria-hidden="true"></canvas>
+      <div class="soft-vignette" aria-hidden="true"></div>
+      <div class="title-card" aria-label="Title">
+        <p class="eyebrow">ふれてみて · touch the water</p>
+        <h1>Eau de Printemps</h1>
+        <p>pastel water ripples</p>
+      </div>
+
+      <button class="tune-toggle" id="tuneToggle" type="button" aria-controls="tunePanel" aria-expanded="false">
+        <span class="icon">tune</span>
+        <span>Tune</span>
+      </button>
+
+      <aside class="tune-panel" id="tunePanel" aria-label="Visual controls">
+        <label>
+          <span>sparkle</span>
+          <input id="sparkleRange" type="range" min="0" max="100" value="74" />
+        </label>
+        <label>
+          <span>ripple</span>
+          <input id="rippleRange" type="range" min="0" max="100" value="78" />
+        </label>
+        <label>
+          <span>petals</span>
+          <input id="petalRange" type="range" min="0" max="100" value="42" />
+        </label>
+        <label>
+          <span>light</span>
+          <input id="lightRange" type="range" min="0" max="100" value="72" />
+        </label>
+        <div class="button-row">
+          <button id="restartBtn" type="button" title="Restart ripples">restart_alt</button>
+          <button id="cameraBtn" type="button" title="Save snapshot">photo_camera</button>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
+
+# Eau de Printemps — Pastel Water Ripples
+
+A dreamy pastel water-surface web experience with translucent flowers, sparkling caustic light, elegant ripples, and touch/mouse interaction.
+
+## Features
+
+- Vertical 9:16 mobile-wallpaper composition
+- Touch-reactive circular water ripples
+- Animated sparkling caustic light overlays
+- Floating translucent petal particles
+- Glassmorphism control panel
+- Snapshot/download button
+- Static HTML/CSS/JS, no build step required
+
+## File structure
+
+```text
+flower-water-ripples/
+├─ index.html
+├─ style.css
+├─ script.js
+├─ assets/
+│  └─ flower-water.png
+└─ .github/
+   └─ workflows/
+      └─ deploy.yml
+```
+
+## Run locally
+
+Open `index.html` directly in your browser, or run a simple local server:
+
+```bash
+python -m http.server 8080
+```
+
+Then open:
+
+```text
+http://localhost:8080
+```
+
+## Deploy to GitHub Pages
+
+### Option 1 — Upload manually
+
+1. Create a new GitHub repository, for example `flower-water-ripples`.
+2. Upload all files from this folder into the repository root.
+3. Go to **Settings → Pages**.
+4. Under **Build and deployment**, choose **GitHub Actions**.
+5. The included workflow will publish the site automatically after you push to `main`.
+
+### Option 2 — Push from terminal
+
+```bash
+git init
+git add .
+git commit -m "Add pastel flower water ripple experience"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/flower-water-ripples.git
+git push -u origin main
+```
+
+Then enable GitHub Pages using **GitHub Actions** in repository settings.
+
+## Customization
+
+- Replace `assets/flower-water.png` to change the visual base.
+- Adjust default slider values in `index.html`.
+- Tune animation behavior in `script.js`.
+- Adjust glassmorphism, colors, and layout in `style.css`.
+
+(() => {
+  const scene = document.getElementById('scene');
+  const canvas = document.getElementById('waterCanvas');
+  const ctx = canvas.getContext('2d', { alpha: true });
+  const tuneToggle = document.getElementById('tuneToggle');
+  const tunePanel = document.getElementById('tunePanel');
+  const restartBtn = document.getElementById('restartBtn');
+  const cameraBtn = document.getElementById('cameraBtn');
+
+  const controls = {
+    sparkle: document.getElementById('sparkleRange'),
+    ripple: document.getElementById('rippleRange'),
+    petals: document.getElementById('petalRange'),
+    light: document.getElementById('lightRange')
+  };
+
+  const state = {
+    width: 0,
+    height: 0,
+    dpr: 1,
+    time: 0,
+    lastAutoRipple: 0,
+    ripples: [],
+    sparkles: [],
+    petals: [],
+    caustics: [],
+    pointer: { x: 0.5, y: 0.5 }
+  };
+
+  const clamp01 = value => Math.max(0, Math.min(1, value));
+  const rand = (min, max) => min + Math.random() * (max - min);
+  const setting = key => Number(controls[key].value) / 100;
+
+  function resize() {
+    const rect = scene.getBoundingClientRect();
+    state.width = rect.width;
+    state.height = rect.height;
+    state.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(state.width * state.dpr);
+    canvas.height = Math.floor(state.height * state.dpr);
+    canvas.style.width = `${state.width}px`;
+    canvas.style.height = `${state.height}px`;
+    ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+    seedCaustics();
+  }
+
+  function seedCaustics() {
+    state.caustics = Array.from({ length: 18 }, (_, i) => ({
+      x: rand(-0.12, 1.12),
+      y: rand(-0.06, 1.06),
+      amp: rand(8, 22),
+      len: rand(90, 220),
+      speed: rand(0.00018, 0.0005),
+      phase: rand(0, Math.PI * 2),
+      width: rand(0.9, 2.4),
+      alpha: rand(0.10, 0.25),
+      drift: i % 2 ? -1 : 1
+    }));
+  }
+
+  function makeSparkle(x = rand(0, state.width), y = rand(0, state.height)) {
+    state.sparkles.push({
+      x,
+      y,
+      size: rand(2, 7),
+      life: 0,
+      maxLife: rand(900, 2400),
+      phase: rand(0, Math.PI * 2),
+      drift: rand(-0.12, 0.12)
+    });
+  }
+
+  function makePetal() {
+    const pink = Math.random() > 0.5;
+    state.petals.push({
+      x: rand(-20, state.width + 20),
+      y: rand(-40, state.height + 40),
+      r: rand(3, 8),
+      rot: rand(0, Math.PI * 2),
+      speed: rand(0.08, 0.28),
+      sway: rand(0.2, 0.7),
+      alpha: rand(0.16, 0.34),
+      hue: pink ? '255, 204, 225' : '196, 247, 240'
+    });
+  }
+
+  function addRipple(x, y, strength = 1) {
+    const max = 72 + 120 * setting('ripple');
+    state.ripples.push({
+      x,
+      y,
+      r: 4,
+      max,
+      alpha: 0.52 * strength,
+      speed: rand(0.58, 1.22) * (0.65 + setting('ripple')),
+      wobble: rand(0, Math.PI * 2)
+    });
+    if (Math.random() < 0.75) makeSparkle(x + rand(-8, 8), y + rand(-8, 8));
+  }
+
+  function pointerPosition(event) {
+    const rect = scene.getBoundingClientRect();
+    const touch = event.touches?.[0] || event.changedTouches?.[0] || event;
+    const x = touch.clientX - rect.left;
+    const y = touch.clientY - rect.top;
+    return { x, y };
+  }
+
+  let lastPointerRipple = 0;
+  function handlePointer(event) {
+    const { x, y } = pointerPosition(event);
+    state.pointer.x = clamp01(x / state.width);
+    state.pointer.y = clamp01(y / state.height);
+    scene.style.setProperty('--mx', `${state.pointer.x * 100}%`);
+    scene.style.setProperty('--my', `${state.pointer.y * 100}%`);
+    const now = performance.now();
+    if (now - lastPointerRipple > 70) {
+      addRipple(x, y, 1.05);
+      lastPointerRipple = now;
+    }
+  }
+
+  function drawStar(x, y, size, alpha) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalAlpha = alpha;
+    const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 3.2);
+    gradient.addColorStop(0, 'rgba(255,255,255,.98)');
+    gradient.addColorStop(0.22, 'rgba(229,255,255,.74)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.beginPath();
+    ctx.arc(0, 0, size * 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.95)';
+    ctx.lineWidth = Math.max(0.7, size * 0.16);
+    ctx.beginPath();
+    ctx.moveTo(-size * 3.1, 0);
+    ctx.lineTo(size * 3.1, 0);
+    ctx.moveTo(0, -size * 3.1);
+    ctx.lineTo(0, size * 3.1);
+    ctx.stroke();
+    ctx.rotate(Math.PI / 4);
+    ctx.globalAlpha = alpha * 0.62;
+    ctx.beginPath();
+    ctx.moveTo(-size * 1.65, 0);
+    ctx.lineTo(size * 1.65, 0);
+    ctx.moveTo(0, -size * 1.65);
+    ctx.lineTo(0, size * 1.65);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawCaustics(dt) {
+    const light = setting('light');
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (const line of state.caustics) {
+      line.phase += dt * line.speed;
+      const x = (line.x + Math.sin(line.phase * .33) * .02) * state.width;
+      const y = (line.y + Math.cos(line.phase * .28) * .018) * state.height;
+      const alpha = line.alpha * (0.45 + light * 1.25);
+      ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+      ctx.lineWidth = line.width * (0.8 + light);
+      ctx.shadowColor = `rgba(220,255,255,${alpha})`;
+      ctx.shadowBlur = 6 + 16 * light;
+      ctx.beginPath();
+      const segments = 5;
+      for (let i = 0; i <= segments; i++) {
+        const t = i / segments;
+        const px = x + (t - .5) * line.len;
+        const py = y + Math.sin(t * Math.PI * 2 + line.phase * line.drift) * line.amp;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawRipples(dt) {
+    const ripplePower = setting('ripple');
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (let i = state.ripples.length - 1; i >= 0; i--) {
+      const r = state.ripples[i];
+      r.r += r.speed * dt * 0.055;
+      const life = clamp01(r.r / r.max);
+      const alpha = r.alpha * (1 - life) * (0.25 + ripplePower * 0.95);
+      if (life >= 1 || alpha <= 0.005) {
+        state.ripples.splice(i, 1);
+        continue;
+      }
+      for (let ring = 0; ring < 3; ring++) {
+        const rr = r.r + ring * 13;
+        ctx.beginPath();
+        ctx.strokeStyle = `rgba(255,255,255,${alpha * (1 - ring * .25)})`;
+        ctx.lineWidth = 1.0 + (1 - life) * 1.8;
+        ctx.shadowColor = 'rgba(206,250,255,.8)';
+        ctx.shadowBlur = 8;
+        ctx.ellipse(
+          r.x,
+          r.y,
+          rr * (1 + Math.sin(r.wobble + rr * .02) * .025),
+          rr * (0.72 + Math.cos(r.wobble + rr * .018) * .022),
+          Math.sin(r.wobble) * .16,
+          0,
+          Math.PI * 2
+        );
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawSparkles(dt) {
+    const sparklePower = setting('sparkle');
+    const desired = Math.floor(16 + sparklePower * 70);
+    if (state.sparkles.length < desired && Math.random() < 0.18 + sparklePower * 0.34) {
+      makeSparkle();
+    }
+    for (let i = state.sparkles.length - 1; i >= 0; i--) {
+      const s = state.sparkles[i];
+      s.life += dt;
+      s.y += Math.sin((state.time + s.phase) * 0.002) * 0.03;
+      s.x += s.drift;
+      const t = s.life / s.maxLife;
+      const pulse = Math.sin(t * Math.PI) * (0.28 + sparklePower * .75);
+      if (t >= 1) {
+        state.sparkles.splice(i, 1);
+      } else {
+        drawStar(s.x, s.y, s.size, pulse);
+      }
+    }
+  }
+
+  function drawPetals(dt) {
+    const petalPower = setting('petals');
+    const desired = Math.floor(petalPower * 28);
+    while (state.petals.length < desired) makePetal();
+    while (state.petals.length > desired) state.petals.pop();
+
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    for (const p of state.petals) {
+      p.y += p.speed * dt * 0.055;
+      p.x += Math.sin(state.time * 0.0007 + p.rot) * p.sway;
+      p.rot += 0.002 * dt;
+      if (p.y > state.height + 48) {
+        p.y = -48;
+        p.x = rand(-20, state.width + 20);
+      }
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.scale(1, .48);
+      ctx.fillStyle = `rgba(${p.hue},${p.alpha})`;
+      ctx.shadowColor = `rgba(${p.hue},0.55)`;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.r * 1.35, p.r, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawLightWash() {
+    const light = setting('light');
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    const x = state.pointer.x * state.width;
+    const y = state.pointer.y * state.height;
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, Math.max(state.width, state.height) * .75);
+    gradient.addColorStop(0, `rgba(255,255,255,${0.08 + light * .16})`);
+    gradient.addColorStop(.42, `rgba(205,252,255,${0.025 + light * .06})`);
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, state.width, state.height);
+    ctx.restore();
+  }
+
+  let last = performance.now();
+  function animate(now) {
+    const dt = Math.min(34, now - last);
+    last = now;
+    state.time += dt;
+    ctx.clearRect(0, 0, state.width, state.height);
+
+    if (now - state.lastAutoRipple > 760 - setting('ripple') * 420) {
+      addRipple(rand(state.width * .06, state.width * .94), rand(state.height * .08, state.height * .95), rand(.34, .68));
+      state.lastAutoRipple = now;
+    }
+
+    drawLightWash();
+    drawCaustics(dt);
+    drawRipples(dt);
+    drawPetals(dt);
+    drawSparkles(dt);
+    requestAnimationFrame(animate);
+  }
+
+  function restart() {
+    state.ripples.length = 0;
+    state.sparkles.length = 0;
+    state.petals.length = 0;
+    seedCaustics();
+    for (let i = 0; i < 9; i++) {
+      addRipple(rand(state.width * .12, state.width * .88), rand(state.height * .12, state.height * .9), rand(.34, .82));
+    }
+  }
+
+  async function saveSnapshot() {
+    const img = document.querySelector('.water-photo');
+    const snap = document.createElement('canvas');
+    const w = Math.floor(state.width * 2);
+    const h = Math.floor(state.height * 2);
+    snap.width = w;
+    snap.height = h;
+    const sctx = snap.getContext('2d');
+
+    // Best-effort export: background image + current animation canvas.
+    sctx.drawImage(img, 0, 0, w, h);
+    sctx.drawImage(canvas, 0, 0, w, h);
+    const link = document.createElement('a');
+    link.download = 'eau-de-printemps-ripples.png';
+    link.href = snap.toDataURL('image/png');
+    link.click();
+  }
+
+  tuneToggle.addEventListener('click', () => {
+    const open = !tunePanel.classList.contains('open');
+    tunePanel.classList.toggle('open', open);
+    tuneToggle.setAttribute('aria-expanded', String(open));
+  });
+
+  restartBtn.addEventListener('click', restart);
+  cameraBtn.addEventListener('click', saveSnapshot);
+  scene.addEventListener('pointerdown', handlePointer);
+  scene.addEventListener('pointermove', event => {
+    if (event.pointerType === 'mouse' && event.buttons === 0) {
+      const { x, y } = pointerPosition(event);
+      state.pointer.x = clamp01(x / state.width);
+      state.pointer.y = clamp01(y / state.height);
+      scene.style.setProperty('--mx', `${state.pointer.x * 100}%`);
+      scene.style.setProperty('--my', `${state.pointer.y * 100}%`);
+      return;
+    }
+    handlePointer(event);
+  });
+  scene.addEventListener('touchmove', event => {
+    handlePointer(event);
+  }, { passive: true });
+
+  window.addEventListener('resize', resize);
+  resize();
+  restart();
+  requestAnimationFrame(animate);
+})();
+
+:root {
+  --glass: rgba(255, 255, 255, 0.24);
+  --glass-strong: rgba(255, 255, 255, 0.42);
+  --ink: rgba(54, 84, 105, 0.88);
+  --ink-soft: rgba(54, 84, 105, 0.62);
+  --rim: rgba(255, 255, 255, 0.55);
+  --shadow: rgba(80, 135, 165, 0.22);
+  --glow: rgba(194, 248, 255, 0.78);
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 28% 12%, rgba(255,255,255,.92), transparent 26rem),
+    linear-gradient(135deg, #eaf8ff 0%, #fbf7ff 42%, #f4ffff 100%);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+button, input { font: inherit; }
+button { cursor: pointer; }
+
+.app {
+  width: 100vw;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.scene {
+  position: relative;
+  width: min(100vw, 58vh);
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  isolation: isolate;
+  background: #dff4ff;
+  box-shadow: 0 28px 90px rgba(111, 166, 188, 0.22);
+}
+
+@media (min-aspect-ratio: 9/16) {
+  .scene { border-radius: 30px; height: min(100dvh, 100vw * 16 / 9); }
+}
+
+.water-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.04) brightness(1.02) contrast(1.02);
+  transform: scale(1.012);
+  animation: photoDrift 18s ease-in-out infinite alternate;
+}
+
+@keyframes photoDrift {
+  from { transform: scale(1.012) translate3d(-0.25%, -0.15%, 0); }
+  to { transform: scale(1.032) translate3d(0.35%, 0.2%, 0); }
+}
+
+#waterCanvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.soft-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at var(--mx, 50%) var(--my, 48%), rgba(255,255,255,.18), transparent 18rem),
+    radial-gradient(circle at 50% 120%, rgba(203, 231, 255, .15), transparent 46%),
+    linear-gradient(to bottom, rgba(255,255,255,.12), transparent 20%, transparent 80%, rgba(255,255,255,.14));
+}
+
+.title-card,
+.tune-toggle,
+.tune-panel {
+  position: absolute;
+  z-index: 4;
+  border: 1px solid var(--rim);
+  background: linear-gradient(135deg, rgba(255,255,255,.42), rgba(255,255,255,.18));
+  box-shadow: 0 18px 45px var(--shadow), inset 0 1px 0 rgba(255,255,255,.62);
+  backdrop-filter: blur(18px) saturate(1.18);
+  -webkit-backdrop-filter: blur(18px) saturate(1.18);
+}
+
+.title-card {
+  left: clamp(16px, 5vw, 34px);
+  top: clamp(18px, 5vw, 38px);
+  max-width: min(78%, 360px);
+  padding: 16px 18px 15px;
+  border-radius: 24px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(76, 115, 135, .66);
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(25px, 7vw, 48px);
+  line-height: .96;
+  letter-spacing: -.055em;
+  font-weight: 760;
+  color: rgba(47, 82, 103, .78);
+}
+
+.title-card p:last-child {
+  margin: 9px 0 0;
+  color: var(--ink-soft);
+  font-size: clamp(13px, 3.5vw, 16px);
+}
+
+.tune-toggle {
+  right: clamp(14px, 4vw, 26px);
+  bottom: calc(clamp(14px, 4vw, 28px) + env(safe-area-inset-bottom));
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 46px;
+  padding: 0 15px;
+  border-radius: 999px;
+  color: rgba(46, 83, 104, .78);
+}
+
+.icon { font-size: 17px; letter-spacing: .02em; }
+
+.tune-panel {
+  right: clamp(14px, 4vw, 26px);
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  width: min(270px, calc(100% - 28px));
+  padding: 15px;
+  border-radius: 24px;
+  display: grid;
+  gap: 13px;
+  opacity: 0;
+  transform: translateY(12px) scale(.98);
+  pointer-events: none;
+  transition: opacity .28s ease, transform .28s ease;
+}
+
+.tune-panel.open {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.tune-panel label {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  letter-spacing: .04em;
+  color: rgba(48, 88, 109, .72);
+}
+
+input[type="range"] {
+  appearance: none;
+  width: 100%;
+  height: 24px;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, rgba(130,226,231,.9), rgba(255, 195, 219, .85));
+  box-shadow: inset 0 1px 1px rgba(255,255,255,.9);
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 19px;
+  height: 19px;
+  margin-top: -6.5px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.9);
+  background: rgba(255,255,255,.92);
+  box-shadow: 0 4px 12px rgba(91,137,160,.28);
+}
+input[type="range"]::-moz-range-track {
+  height: 6px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, rgba(130,226,231,.9), rgba(255, 195, 219, .85));
+}
+input[type="range"]::-moz-range-thumb {
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.9);
+  background: rgba(255,255,255,.92);
+}
+
+.button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.button-row button {
+  border: 1px solid rgba(255,255,255,.62);
+  border-radius: 16px;
+  padding: 10px 12px;
+  color: rgba(48, 88, 109, .72);
+  background: rgba(255,255,255,.33);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.65);
+}
+.button-row button:active, .tune-toggle:active { transform: translateY(1px); }
+
+@media (max-width: 460px) {
+  .title-card { max-width: calc(100% - 104px); padding: 14px 15px 13px; }
+  .eyebrow { font-size: 9px; letter-spacing: .13em; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .water-photo { animation: none; }
+  .tune-panel, .tune-toggle, .button-row button { transition: none; }
+}
