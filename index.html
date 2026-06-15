@@ -546,6 +546,7 @@
         f.behavior = 'glide';
         f.speedMood = rand(.56,.76);
         f.behaviorTimer = rand(2.8,6.2);
+        f.turnBias = rand(-.32,.32);
       } else if(r < .56){
         f.behavior = 'cruise';
         f.speedMood = rand(.90,1.08);
@@ -556,12 +557,12 @@
         f.behaviorTimer = rand(2.6,5.6);
       } else if(r < .86){
         f.behavior = 'forage';
-        f.speedMood = rand(.64,.88);
+        f.speedMood = rand(2.64,2.88);
         f.behaviorTimer = rand(2.4,4.8);
-        f.turnBias = rand(-.22,.22);
+        f.turnBias = rand(-.32,.32);
       } else {
         f.behavior = 'burst';
-        f.speedMood = rand(2.14,2.34);
+        f.speedMood = rand(3.14,3.34);
         f.behaviorTimer = rand(.9,1.8);
       }
       f.targetSpeed = Math.max(f.baseSpeed*.48, f.baseSpeed * f.speedMood);
